@@ -1,63 +1,6 @@
-import glob
+import os
 import wx
-from wx.lib.pubsub import Publisher
-########################################################################
-class ViewerFrame(wx.Frame):
-    """"""
-    #----------------------------------------------------------------------
-    def __init__(self):
-        """Constructor"""
-        wx.Frame.__init__(self, None, title="Image Viewer")
-        panel = ViewerPanel(self)
-        self.folderPath = ""
-        Publisher().subscribe(self.resizeFrame, ("resize"))
-        
-        self.initToolbar()
-        self.sizer = wx.BoxSizer(wx.VERTICAL)
-        self.sizer.Add(panel, 1, wx.EXPAND)
-        self.SetSizer(self.sizer)
-        
-        self.Show()
-        self.sizer.Fit(self)
-        self.Center()
-                
-    #----------------------------------------------------------------------
-    def initToolbar(self):
-        """
-        Initialize the toolbar
-        """
-        self.toolbar = self.CreateToolBar()
-        self.toolbar.SetToolBitmapSize((16,16))
-        
-        open_ico = wx.ArtProvider.GetBitmap(wx.ART_FILE_OPEN, wx.ART_TOOLBAR, (16,16))
-        openTool = self.toolbar.AddSimpleTool(wx.ID_ANY, open_ico, "Open", "Open an Image Directory")
-        self.Bind(wx.EVT_MENU, self.onOpenDirectory, openTool)
-        
-        self.toolbar.Realize()
-        
-    #----------------------------------------------------------------------
-    def onOpenDirectory(self, event):
-        """
-        Opens a DirDialog to allow the user to open a folder with pictures
-        """
-        dlg = wx.DirDialog(self, "Choose a directory",
-                           style=wx.DD_DEFAULT_STYLE)
-        
-        if dlg.ShowModal() == wx.ID_OK:
-            self.folderPath = dlg.GetPath()
-            print (self.folderPath)
-            picPaths = glob.glob(self.folderPath + "\\*.jpg")
-            print (picPaths)
-        Publisher().sendMessage("update images", picPaths)
-        
-    #----------------------------------------------------------------------
-    def resizeFrame(self, msg):
-        """"""
-        self.sizer.Fit(self)
-
-
-    import wx
-from wx.lib.pubsub import Publisher
+from pubsub import pub
 ########################################################################
 class ViewerPanel(wx.Panel):
     """"""
@@ -71,7 +14,7 @@ class ViewerPanel(wx.Panel):
         self.currentPicture = 0
         self.totalPictures = 0
         self.photoMaxSize = height - 200
-        Publisher().subscribe(self.updateImages, ("update images"))
+        pub.subscribe(self.updateImages, "update images")
         self.slideTimer = wx.Timer(None)
         self.slideTimer.Bind(wx.EVT_TIMER, self.update)
         
@@ -86,9 +29,9 @@ class ViewerPanel(wx.Panel):
         self.mainSizer = wx.BoxSizer(wx.VERTICAL)
         btnSizer = wx.BoxSizer(wx.HORIZONTAL)
         
-        img = wx.EmptyImage(self.photoMaxSize,self.photoMaxSize)
+        img = wx.Image(self.photoMaxSize,self.photoMaxSize)
         self.imageCtrl = wx.StaticBitmap(self, wx.ID_ANY, 
-                                         wx.BitmapFromImage(img))
+                                         wx.Bitmap(img))
         self.mainSizer.Add(self.imageCtrl, 0, wx.ALL|wx.CENTER, 5)
         self.imageLabel = wx.StaticText(self, label="")
         self.mainSizer.Add(self.imageLabel, 0, wx.ALL|wx.CENTER, 5)
@@ -126,11 +69,11 @@ class ViewerPanel(wx.Panel):
         else:
             NewH = self.photoMaxSize
             NewW = self.photoMaxSize * W / H
-        img = img.Scale(NewW,NewH)
-        self.imageCtrl.SetBitmap(wx.BitmapFromImage(img))
+        img = img.Scale(int(NewW),int(NewH))
+        self.imageCtrl.SetBitmap(wx.Bitmap(img))
         self.imageLabel.SetLabel(image_name)
         self.Refresh()
-        Publisher().sendMessage("resize", "")
+        pub.sendMessage("resize", message = "")
         
     #----------------------------------------------------------------------
     def nextPicture(self):
@@ -163,11 +106,11 @@ class ViewerPanel(wx.Panel):
         self.nextPicture()
         
     #----------------------------------------------------------------------
-    def updateImages(self, msg):
+    def updateImages(self, message = None, arg2=None):
         """
         Updates the picPaths list to contain the current folder's images
         """
-        self.picPaths = msg.data
+        self.picPaths = message
         self.totalPictures = len(self.picPaths)
         self.loadImage(self.picPaths[0])
         
@@ -198,3 +141,69 @@ class ViewerPanel(wx.Panel):
         else:
             self.slideTimer.Stop()
             btn.SetLabel("Slide Show")
+
+
+import glob
+import wx
+from pubsub import pub
+
+########################################################################
+class ViewerFrame(wx.Frame):
+    """"""
+    #----------------------------------------------------------------------
+    def __init__(self):
+        """Constructor"""
+        wx.Frame.__init__(self, None, title="Image Viewer")
+        self.panel = ViewerPanel(self)
+        self.folderPath = ""
+        pub.subscribe(self.resizeFrame, "resize")
+        
+        self.initToolbar()
+        self.sizer = wx.BoxSizer(wx.VERTICAL)
+        self.sizer.Add(self.panel, 1, wx.EXPAND)
+        self.SetSizer(self.sizer)
+        
+        self.Show()
+        self.sizer.Fit(self)
+        self.Center()
+                
+    #----------------------------------------------------------------------
+    def initToolbar(self):
+        """
+        Initialize the toolbar
+        """
+        self.toolbar = self.CreateToolBar()
+        self.toolbar.SetToolBitmapSize((16,16))
+        
+        open_ico = wx.ArtProvider.GetBitmap(wx.ART_FILE_OPEN, wx.ART_TOOLBAR, (16,16))
+        openTool = self.toolbar.AddSimpleTool(wx.ID_ANY, open_ico, "Open", "Open an Image Directory")
+        self.Bind(wx.EVT_MENU, self.onOpenDirectory, openTool)
+        
+        self.toolbar.Realize()
+        
+    #----------------------------------------------------------------------
+    def onOpenDirectory(self, event):
+        """
+        Opens a DirDialog to allow the user to open a folder with pictures
+        """
+        dlg = wx.DirDialog(self, "Choose a directory",
+                           style=wx.DD_DEFAULT_STYLE)
+        
+        if dlg.ShowModal() == wx.ID_OK:
+            self.folderPath = dlg.GetPath()
+            print (self.folderPath)
+            picPaths = glob.glob(self.folderPath + "\\*.jpg")
+            print (picPaths)
+        pub.sendMessage("update images", message=picPaths)
+        
+    #----------------------------------------------------------------------
+    def resizeFrame(self, message=None):
+        """"""
+        self.sizer.Fit(self)
+
+
+
+if __name__ == "__main__":
+    app = wx.App()
+    frame = ViewerFrame()
+    app.MainLoop()
